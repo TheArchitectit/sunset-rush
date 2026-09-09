@@ -20,6 +20,8 @@ jobs:
           python-version: '3.12'
       - name: Guardrails pattern scan (baseline + project overlay)
         run: node .devgate/scripts/guardrails-scan.mjs
+      - name: Install semantic-scan compiler API
+        run: npm install --no-save typescript@5
       - name: Semantic scan
         run: node .devgate/scripts/semantic-scan.mjs
       - name: Regression check
@@ -28,6 +30,8 @@ jobs:
         run: node scripts/verify-standalone.mjs
       - name: Headless game tests
         run: node .devgate/scripts/run-tests.mjs
+      - name: Trusted-input E2E (real keyboard/touch via CDP)
+        run: node tests/e2e-chrome.mjs
       - name: Spec traceability (blocking)
         run: python3 .devgate/scripts/spec_traceability.py --report
       - name: Silent-success scan
