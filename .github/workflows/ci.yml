@@ -1,0 +1,36 @@
+name: gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  devgate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Guardrails pattern scan (baseline + project overlay)
+        run: node .devgate/scripts/guardrails-scan.mjs
+      - name: Semantic scan
+        run: node .devgate/scripts/semantic-scan.mjs
+      - name: Regression check
+        run: python3 .devgate/scripts/regression_check.py --all --pre-commit
+      - name: Standalone/offline invariants (project gate)
+        run: node scripts/verify-standalone.mjs
+      - name: Headless game tests
+        run: node .devgate/scripts/run-tests.mjs
+      - name: Spec traceability (blocking)
+        run: python3 .devgate/scripts/spec_traceability.py --report
+      - name: Silent-success scan
+        run: bash .devgate/scripts/silent-success-scan.sh
+      - name: Schema health (skips when unconfigured)
+        run: node .devgate/scripts/schema-health-check.mjs
