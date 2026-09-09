@@ -1,26 +1,62 @@
-# Sunset Rush
+# Sunset Rush: Overdrive
 
-A pocket arcade racer in the spirit of early-2000s checkpoint racers: one self-contained HTML file, no dependencies, no assets, works offline.
+A single-file combat arcade racer for desktop and mobile browsers, in the spirit
+of late-90s/early-2000s console arcade racers. One `index.html` is the whole
+game: canvas-drawn pseudo-3D, synthesized Web Audio sound, no assets, no
+dependencies, works offline.
 
-**Play:** open `index.html` in any modern browser, or visit the GitHub Pages site for this repo.
+**Play:** https://thearchitectit.github.io/sunset-rush/
 
-## How to play
+## The game
 
-- Weave through traffic and hit each checkpoint before the clock runs out.
-- Checkpoints add time and bonus points. Crashes cost speed and score.
-- **Keyboard:** Left/Right arrows (or A/D) steer, Down arrow (or S / Space) brakes. Acceleration is automatic.
-- **Touch:** hold the left or right side of the screen to steer; the center strip brakes. Multi-touch works (steer + brake).
+- **Five biomes** — Sunset Coast, Neon City, Red Desert, Frozen Tundra (low
+  grip), Volcano — with distinct palettes, roadside props, weather particles,
+  and curve/hill profiles. Clear a level's checkpoint gates to advance.
+- **Weapons** — blaster, homing missiles, mines, shockwave. Pick up weapon
+  crates (amber) to equip; ammo is limited.
+- **Swarming mobs** — skitters and brutes spawn ahead, steer toward you, and
+  ram for armor damage. Shoot them first; they get faster every level.
+- **Power-ups** — nitro, shield, repair, magnet, clock crates (cyan/green).
+- **Armor pool** — mob rams and traffic crashes cost armor; zero armor wrecks
+  the run. The checkpoint timer still applies.
+- **Effects** — particles, screen shake, speed lines, muzzle flash, biome
+  weather, synthesized engine/weapon/explosion/pickup sounds (M mutes).
 
-## Features
+## Controls
 
-- Pseudo-3D road renderer (curves, hills, rumble strips, roadside props, parallax sunset skyline) drawn entirely on canvas
-- Synthesized sound with the Web Audio API: engine hum tied to speed, checkpoint jingle, crash noise. No audio files.
-- Mobile friendly: responsive canvas, touch zones, safe-area aware HUD
-- **Downloadable:** the Download button on the title screen saves the game as a single HTML file you can keep and play offline
-- Retro finish: scanlines, vignette, synthwave palette
+| Input | Action |
+| --- | --- |
+| Arrows or A/D | Steer |
+| Down or S | Brake |
+| Space or Z | Fire equipped weapon |
+| M | Mute |
+| Touch: screen sides / center strip / FIRE pad | Steer / brake / fire |
 
-## Files
+The title and game-over screens include a **Download this game (HTML)** button:
+the saved file runs from disk with no network.
 
-- `index.html` - the entire game (markup, styles, logic, sound)
+## Development
 
-No build step. No tracking. No external requests.
+Spec-first with OpenSpec; gated with
+[DevGate](https://github.com/TheArchitectit/DevGate-Agentic-Framework) (vendored
+at `.devgate/`, project deltas in the `.guardrails/` overlay — the baseline is
+never edited).
+
+- `openspec/changes/add-overdrive-combat/` — proposal, design, tasks, spec deltas
+- `openspec/specs/` — archived capability specs (requirement ids are traced to
+  code markers by the traceability gate)
+
+Run the gates locally:
+
+```bash
+node .devgate/scripts/guardrails-scan.mjs        # pattern rules (baseline + overlay)
+node .devgate/scripts/semantic-scan.mjs          # AST scan (needs: npm i --no-save typescript@5)
+python3 .devgate/scripts/regression_check.py --staged --pre-commit
+node scripts/verify-standalone.mjs               # project gate: offline/single-file invariants
+node .devgate/scripts/run-tests.mjs              # headless game-logic tests (node --test)
+python3 .devgate/scripts/spec_traceability.py    # blocking: every requirement id needs a marker
+```
+
+`tests/game.test.js` loads the real game script into a stubbed DOM and drives
+the actual game loop: weapons, mobs, power-ups, biomes, determinism, and
+regression guards for every entry in `.guardrails/failure-registry.jsonl`.

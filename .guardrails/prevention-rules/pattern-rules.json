@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "rule_id": "PREVENT-SR-001",
+      "name": "No dynamic code evaluation",
+      "enabled": true,
+      "pattern": "\\beval\\s*\\(|new\\s+Function\\s*\\(",
+      "forbidden_context": null,
+      "message": "eval()/new Function() is banned in Sunset Rush sources",
+      "severity": "error",
+      "file_glob": ["*.js", "*.mjs"],
+      "suggestion": "Keep all game code static in index.html; drive tests via window.__game"
+    },
+    {
+      "rule_id": "PREVENT-SR-002",
+      "name": "Gameplay randomness must be seeded",
+      "enabled": true,
+      "pattern": "Math\\.random",
+      "forbidden_context": null,
+      "message": "Math.random breaks run determinism (spec sr-pre-determinism)",
+      "severity": "error",
+      "file_glob": ["*.js", "*.mjs"],
+      "suggestion": "Use the seeded rng() exposed by the game core"
+    },
+    {
+      "rule_id": "PREVENT-SR-003",
+      "name": "No audio assets",
+      "enabled": true,
+      "pattern": "new\\s+Audio\\s*\\(|<audio",
+      "forbidden_context": null,
+      "message": "Audio must be synthesized with Web Audio (spec sr-pre-audio)",
+      "severity": "error",
+      "file_glob": ["*.js", "*.mjs", "*.html"],
+      "suggestion": "Add a synthesized SFX function instead of loading a file"
+    },
+    {
+      "rule_id": "PREVENT-SR-004",
+      "name": "No network calls from game or tests",
+      "enabled": true,
+      "pattern": "\\bfetch\\s*\\(|XMLHttpRequest|WebSocket",
+      "forbidden_context": null,
+      "message": "Sunset Rush is offline-only: no network calls in game, tests, or gate scripts",
+      "severity": "error",
+      "file_glob": ["*.js", "*.mjs"],
+      "suggestion": "Remove the call; the game and its gates run fully offline"
+    }
+  ]
+}
