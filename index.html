@@ -11,9 +11,13 @@ html,body{height:100%;background:#12062b;overflow:hidden;touch-action:none;font-
 #game{position:fixed;inset:0;width:100%;height:100%;display:block;}
 .hud{position:fixed;z-index:5;pointer-events:none;text-shadow:2px 2px 0 #12062b;}
 #hud-top{top:calc(8px + env(safe-area-inset-top));left:10px;right:10px;display:flex;justify-content:space-between;gap:6px;font-weight:bold;}
-#hud-top .box{background:rgba(18,6,43,.55);border:2px solid var(--pink);border-radius:8px;padding:4px 9px;font-size:13px;line-height:1.3;min-width:64px;}
-#hud-top .label{color:var(--cyan);font-size:9px;letter-spacing:1px;}
-#hud-armor-wrap{width:110px;height:10px;border:1px solid var(--cyan);border-radius:5px;overflow:hidden;background:#1a0b3d;margin-top:2px;}
+#hud-top .box{background:rgba(18,6,43,.55);border:2px solid var(--pink);border-radius:8px;padding:4px 9px;font-size:14px;line-height:1.3;min-width:64px;}
+#hud-top .label{color:var(--cyan);font-size:10px;letter-spacing:1px;}
+#hud-weapon-box.flash{border-color:#fff!important;box-shadow:0 0 14px #fff;}
+.btn:focus-visible{outline:3px solid #fff;outline-offset:2px;}
+#hint{top:calc(60px + env(safe-area-inset-top));left:0;right:0;text-align:center;font-size:13px;font-weight:bold;color:#fff;background:rgba(18,6,43,.6);padding:5px 12px;letter-spacing:1px;}
+@media (max-width:640px){#hint{top:calc(120px + env(safe-area-inset-top));font-size:12px;}}
+#hud-armor-wrap{width:130px;height:10px;border:1px solid var(--cyan);border-radius:5px;overflow:hidden;background:#1a0b3d;margin-top:2px;}
 #hud-armor-fill{height:100%;width:100%;background:var(--green);}
 #hud-weapon-box{border-color:var(--amber)!important;}
 #msg{top:34%;left:0;right:0;text-align:center;font-size:clamp(26px,7vw,58px);font-weight:bold;color:var(--amber);text-shadow:3px 3px 0 var(--pink),6px 6px 0 #12062b;letter-spacing:2px;}
@@ -37,13 +41,13 @@ html,body{height:100%;background:#12062b;overflow:hidden;touch-action:none;font-
 #fire-pad.on{background:rgba(255,176,58,.5);color:#fff;}
 @media (max-width:640px){
 #hud-top{flex-wrap:wrap;gap:4px;}
-#hud-top .box{min-width:0;padding:3px 6px;font-size:11px;}
-#hud-armor-wrap{width:64px;}
+#hud-top .box{min-width:0;padding:3px 6px;font-size:13px;}
+#hud-armor-wrap{width:96px;}
 }
 </style>
 </head>
 <body>
-<canvas id="game"></canvas>
+<canvas id="game" role="img" aria-label="Sunset Rush Overdrive race view"></canvas>
 <div id="hud-top" class="hud hidden">
   <div class="box"><div class="label">SCORE</div><div id="hud-score">0</div></div>
   <div class="box"><div class="label">LEVEL</div><div id="hud-level">1</div></div>
@@ -52,7 +56,8 @@ html,body{height:100%;background:#12062b;overflow:hidden;touch-action:none;font-
   <div class="box" id="hud-weapon-box"><div class="label">WEAPON</div><div id="hud-weapon">-</div></div>
   <div class="box" style="text-align:right"><div class="label">SPEED</div><div><span id="hud-speed">0</span> mph</div></div>
 </div>
-<div id="msg" class="hud"></div>
+<div id="msg" class="hud" aria-live="polite"></div>
+<div id="hint" class="hud hidden"></div>
 <div id="banner" class="hud"></div>
 <div id="touch">
   <div class="zone" id="tz-left">&#9664;</div>
@@ -128,6 +133,7 @@ var BIOMES=[
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 var seedBase=1337;
 var rng=mulberry32(seedBase);
+var vrng=mulberry32(seedBase^0x9e37);
 var trackRng=mulberry32(seedBase);
 function clamp(v,a,b){return v<a?a:(v>b?b:v);}
 function lerp(a,b,p){return a+(b-a)*p;}
@@ -178,7 +184,7 @@ function beep(freq,dur,type,vol,when,slide){
 function noiseBurst(dur,vol,freq){
   if(!AC||muted)return;
   var len=Math.floor(AC.sampleRate*dur),buf=AC.createBuffer(1,len,AC.sampleRate),d=buf.getChannelData(0);
-  for(var i=0;i<len;i++)d[i]=(rng()*2-1)*Math.pow(1-i/len,2);
+  for(var i=0;i<len;i++)d[i]=(vrng()*2-1)*Math.pow(1-i/len,2);
   var s=AC.createBufferSource();s.buffer=buf;
   var g=AC.createGain();g.gain.value=vol;
   var f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=freq;
@@ -265,16 +271,17 @@ var mobs=[],projectiles=[],mines=[],pickups=[],particles=[],weather=[];
 var mobSpawnT=2,pickupSpawnT=1.5;
 var shake=0,flashT=0,flashColor='#fff',muzzleT=0,shockT=0,bannerT=0,msgT=0;
 var nextGate=GATE_SEGS*SEG_LEN,totalDist=0;
-var keysHeld={},input={left:false,right:false,brake:false,fire:false};
+var input={left:false,right:false,brake:false,fire:false},fireQueued=false,hintT=0;
 function maxSpeed(){return BASE_SPEED*biomeOf(level).top*(nitroT>0?1.35:1);}
 function spawnIntervalFor(lv){return Math.max(0.5,1.6-0.18*(lv-1));}
 function spawnInterval(){return spawnIntervalFor(level);}
 function mobSpeedFor(lv,type){return BASE_SPEED*MOB_TYPES[type].spd*(1+0.06*(lv-1));}
 function reset(seed){
   seedBase=(typeof seed==='number')?seed:seedBase;
-  rng=mulberry32(seedBase);
+  rng=mulberry32(seedBase);vrng=mulberry32(seedBase^0x9e37);
   level=1;score=0;armor=ARMOR_MAX;timeLeft=TIME_START;
-  pos=0;playerX=0;speed=0;weapon=null;ammo=0;fireCd=0;crashCd=0;totalDist=0;
+  pos=0;playerX=0;speed=0;weapon='blaster';ammo=Infinity;fireCd=0;crashCd=0;totalDist=0;
+  lastBeep=9;fireQueued=false;
   nitroT=0;shieldT=0;magnetT=0;lowArmorBeep=0;
   mobs=[];projectiles=[];mines=[];pickups=[];particles=[];weather=[];
   mobSpawnT=2;pickupSpawnT=1.2;shake=0;flashT=0;muzzleT=0;shockT=0;bannerT=0;
@@ -295,15 +302,24 @@ var cars=[];
 function showMsg(t){document.getElementById('msg').textContent=t;}
 function showBanner(t){document.getElementById('banner').textContent=t;}
 function startRace(){
+  ptrRoles={};
   document.getElementById('screen-start').classList.add('hidden');
   document.getElementById('screen-over').classList.add('hidden');
   document.getElementById('hud-top').classList.remove('hidden');
   reset();
+  hintT=6;
+  var hintEl=document.getElementById('hint');
+  hintEl.textContent='SPACE/Z or FIRE to shoot \u00b7 arrows steer \u00b7 W crates = special weapons';
+  hintEl.classList.remove('hidden');
+  syncTouchUI();
   state='countdown';countdownT=3.2;
   showMsg('3');
 }
 function gameOver(reason){
   state='gameover';
+  ptrRoles={};applyPtrRoles();
+  hintT=0;document.getElementById('hint').classList.add('hidden');
+  syncTouchUI();
   document.getElementById('over-title').innerHTML=(reason==='wrecked')?'WRECKED':'TIME <span>UP</span>';
   document.getElementById('final-stats').textContent=
     'Level '+level+' ('+biomeOf(level).name+') · Score '+score+' · '+Math.round(speed/SEG_LEN*2.2)+' mph';
@@ -370,7 +386,7 @@ function fireWeapon(){
       if(dz>-4*SEG_LEN&&dz<40*SEG_LEN&&Math.abs(mobs[j].x-playerX)<1.2)killMob(mobs[j],true);
     }
   }
-  if(ammo<=0){weapon=null;}
+  if(ammo<=0){weapon='blaster';ammo=Infinity;}
 }
 function spawnPickup(dzAhead,x,kind){
   if(pickups.length>=PICKUP_CAP)return null;
@@ -397,8 +413,8 @@ function applyPickup(p){
 }
 function burst(z,x,color,n){
   for(var i=0;i<n&&particles.length<PART_CAP;i++){
-    particles.push({z:z,x:x,y:200,vz:(rng()*2-1)*SEG_LEN*3,vx:(rng()*2-1)*2.4,vy:rng()*900+200,
-      life:0.7+rng()*0.5,t:0,color:color,size:1+rng()*2});
+    particles.push({z:z,x:x,y:200,vz:(vrng()*2-1)*SEG_LEN*3,vx:(vrng()*2-1)*2.4,vy:vrng()*900+200,
+      life:0.7+vrng()*0.5,t:0,color:color,size:1+vrng()*2});
   }
 }
 function updateTraffic(dt){
@@ -492,10 +508,10 @@ function updateEffects(dt){
     p.z+=p.vz*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy-=1600*dt;
   }
   var b=biomeOf(level),rate=(b.weather==='snow'?26:(b.weather==='rain'?60:(b.weather==='embers'?14:(b.weather==='neon'?30:10))));
-  if(weather.length<140&&rng()<rate*dt*10){
-    weather.push({x:rng()*W,y:-20,life:3,t:0,type:b.weather,
-      vx:(b.weather==='embers'?0:(rng()-0.5)*40),
-      vy:(b.weather==='snow'?40+rng()*40:(b.weather==='embers'?-(30+rng()*50):(b.weather==='neon'?500+rng()*300:80+rng()*60)))});
+  if(weather.length<140&&vrng()<rate*dt*10){
+    weather.push({x:vrng()*W,y:-20,life:3,t:0,type:b.weather,
+      vx:(b.weather==='embers'?0:(vrng()-0.5)*40),
+      vy:(b.weather==='snow'?40+vrng()*40:(b.weather==='embers'?-(30+vrng()*50):(b.weather==='neon'?500+vrng()*300:80+vrng()*60)))});
   }
   for(i=weather.length-1;i>=0;i--){
     var w=weather[i];w.t+=dt;
@@ -513,8 +529,9 @@ function update(dt){
   var b=biomeOf(level);
   if(state==='countdown'){
     countdownT-=dt;
+    updateTraffic(dt);
     var c=Math.ceil(countdownT);
-    if(countdownT<=0){state='race';showMsg('GO!');msgT=0.8;beep(880,.3,'square',.2);}
+    if(countdownT<=0){state='race';showMsg('GO!');msgT=0.8;beep(880,.3,'square',.2);syncTouchUI();}
     else showMsg(String(c)),beepTick(c);
   }
   if(state==='title'){
@@ -545,7 +562,7 @@ function update(dt){
   else speed+=(nitroT>0?ACCEL*1.6:ACCEL)*dt;
   if(Math.abs(playerX)>1){
     if(speed>OFFROAD_LIMIT)speed+=OFFROAD_DECEL*dt;
-    if(rng()<dt*20)burst(pos,(playerX>0?1:-1),'#c8a86a',1);
+    if(vrng()<dt*20)burst(pos,(playerX>0?1:-1),'#c8a86a',1);
   }
   speed=clamp(speed,0,ms);
   pos=(pos+speed*dt)%trackLen;
@@ -557,6 +574,8 @@ function update(dt){
     msgT=1.2;showMsg('CHECKPOINT +'+TIME_GATE+'s');
   }
   updateTraffic(dt);updateMobs(dt);updateProjectiles(dt);updatePickups(dt);updateEffects(dt);
+  if(hintT>0){hintT-=dt;if(hintT<=0)document.getElementById('hint').classList.add('hidden');}
+  if(fireQueued){fireQueued=false;if(fireCd>0)flashWeaponBox();else fireWeapon();}
   if(input.fire)fireWeapon();
   engineUpdate();
 }
@@ -770,11 +789,11 @@ function drawPlayer(){
   var tilt=(input.left?-0.06:(input.right?0.06:0));
   if(nitroT>0){
     for(var i=0;i<3;i++){
-      ctx.fillStyle='rgba(255,'+(120+Math.floor(rng()*100))+',31,'+(0.5+rng()*0.4)+')';
-      var fw=w*(0.24+rng()*0.14);
+      ctx.fillStyle='rgba(255,'+(120+Math.floor(vrng()*100))+',31,'+(0.5+vrng()*0.4)+')';
+      var fw=w*(0.24+vrng()*0.14);
       ctx.beginPath();ctx.moveTo(px-fw/2,py+w*0.08);
       ctx.lineTo(px+fw/2,py+w*0.08);
-      ctx.lineTo(px+(rng()-0.5)*fw*0.5,py+w*0.08+w*(0.3+rng()*0.3));
+      ctx.lineTo(px+(vrng()-0.5)*fw*0.5,py+w*0.08+w*(0.3+vrng()*0.3));
       ctx.closePath();ctx.fill();
     }
   }
@@ -789,7 +808,7 @@ function drawPlayer(){
   }
   if(muzzleT>0){
     ctx.fillStyle='rgba(33,230,247,.9)';
-    ctx.beginPath();ctx.arc(px,py-w*0.35,w*0.08+rng()*w*0.04,0,6.2832);ctx.fill();
+    ctx.beginPath();ctx.arc(px,py-w*0.35,w*0.08+vrng()*w*0.04,0,6.2832);ctx.fill();
   }
 }
 function drawWeather(){
@@ -817,7 +836,7 @@ function drawSpeedLines(){
   ctx.strokeStyle='rgba(255,255,255,'+(0.25*(sp-0.7))+')';
   ctx.lineWidth=2;
   for(var i=0;i<n;i++){
-    var a=rng()*6.2832,r1=H*0.45,r2=H*0.55+rng()*H*0.2;
+    var a=vrng()*6.2832,r1=H*0.45,r2=H*0.55+vrng()*H*0.2;
     var cx=W/2,cy=H*0.55;
     ctx.beginPath();
     ctx.moveTo(cx+Math.cos(a)*r1,cy+Math.sin(a)*r1*0.6);
@@ -828,7 +847,7 @@ function drawSpeedLines(){
 function render(){
   var b=biomeOf(level);
   ctx.save();
-  if(shake>0)ctx.translate((rng()*2-1)*shake,(rng()*2-1)*shake);
+  if(shake>0)ctx.translate((vrng()*2-1)*shake,(vrng()*2-1)*shake);
   drawSky(b);
   ctx.fillStyle=b.grass[0];ctx.fillRect(0,H*0.6,W,H*0.4);
   var base=findSeg(pos),basePct=(pos%SEG_LEN)/SEG_LEN;
@@ -883,6 +902,11 @@ function render(){
   }
 }
 // ---------------------------------------------------------------- HUD
+function flashWeaponBox(){
+  var b=document.getElementById('hud-weapon-box');
+  b.classList.add('flash');
+  setTimeout(function(){b.classList.remove('flash');},120);
+}
 var el={};
 ['hud-score','hud-time','hud-speed','hud-level','hud-weapon','hud-armor-fill'].forEach(function(id){el[id]=document.getElementById(id);});
 function updateHUD(){
@@ -892,7 +916,7 @@ function updateHUD(){
   el['hud-time'].style.color=timeLeft<10?'#ff4a3c':'#fff';
   el['hud-speed'].textContent=Math.round(speed/SEG_LEN*2.2);
   el['hud-level'].textContent=level+' · '+biomeOf(level).name;
-  el['hud-weapon'].textContent=weapon?(WEAPONS[weapon].label+' ×'+ammo):'-';
+  el['hud-weapon'].textContent=weapon?(WEAPONS[weapon].label+(ammo===Infinity?' \u221e':' \u00d7'+ammo)):'-';
   var f=el['hud-armor-fill'];
   f.style.width=(armor/ARMOR_MAX*100)+'%';
   f.style.background=armor>60?'#7dff5a':(armor>30?'#ffb03a':'#ff4a3c');
@@ -900,28 +924,32 @@ function updateHUD(){
 // ---------------------------------------------------------------- input
 window.addEventListener('keydown',function(e){
   var k=e.key.toLowerCase();
-  keysHeld[k]=true;
   if(k==='arrowleft'||k==='a')input.left=true;
   if(k==='arrowright'||k==='d')input.right=true;
   if(k==='arrowdown'||k==='s')input.brake=true;
-  if(k===' '||k==='z'){input.fire=true;if(state==='race')e.preventDefault();}
+  if(k===' '||k==='z'){input.fire=true;if(!e.repeat)fireQueued=true;if(state==='race')e.preventDefault();}
   if(k==='m')muted=!muted;
   if((state==='title'||state==='gameover')&&(k==='enter'||k===' ')){audioInit();startRace();}
 });
 window.addEventListener('keyup',function(e){
   var k=e.key.toLowerCase();
-  keysHeld[k]=false;
   if(k==='arrowleft'||k==='a')input.left=false;
   if(k==='arrowright'||k==='d')input.right=false;
   if(k==='arrowdown'||k==='s')input.brake=false;
   if(k===' '||k==='z')input.fire=false;
 });
 var ptrRoles={};
+var IS_TOUCH=('ontouchstart' in window)||(window.navigator&&navigator.maxTouchPoints>0);
+function syncTouchUI(){
+  var on=IS_TOUCH&&(state==='race'||state==='countdown');
+  document.getElementById('touch').style.display=on?'block':'none';
+  document.getElementById('fire-pad').style.display=on?'flex':'none';
+}
 function setZone(id,on){var el2=document.getElementById(id);if(el2)el2.classList.toggle('on',on);}
 function applyPtrRoles(){
   input.left=false;input.right=false;input.brake=false;input.fire=false;
   for(var id in ptrRoles){
-    var r=ptrRoles[id];
+    var r=ptrRoles[id].role;
     if(r==='left')input.left=true;
     else if(r==='right')input.right=true;
     else if(r==='brake')input.brake=true;
@@ -930,9 +958,7 @@ function applyPtrRoles(){
   setZone('tz-left',input.left);setZone('tz-right',input.right);
   setZone('tz-brake',input.brake);setZone('fire-pad',input.fire);
 }
-function roleForTarget(t,x){
-  if(t&&t.id==='fire-pad')return 'fire';
-  if(t&&(t.id==='tz-left'||t.id==='tz-right'||t.id==='tz-brake'))return t.id.slice(3);
+function zoneForX(x){
   if(x<W*0.32)return 'left';
   if(x>W*0.68)return 'right';
   return 'brake';
@@ -940,30 +966,37 @@ function roleForTarget(t,x){
 window.addEventListener('pointerdown',function(e){
   if(state!=='race'&&state!=='countdown')return;
   if(e.target&&e.target.classList&&e.target.classList.contains('btn'))return;
-  ptrRoles[e.pointerId]=roleForTarget(e.target,e.clientX);
+  var fireOrigin=!!(e.target&&e.target.id==='fire-pad');
+  ptrRoles[e.pointerId]={fireOrigin:fireOrigin,role:fireOrigin?'fire':zoneForX(e.clientX)};
+  if(fireOrigin)fireQueued=true;
   applyPtrRoles();
 });
 window.addEventListener('pointermove',function(e){
-  if(!(e.pointerId in ptrRoles))return;
-  ptrRoles[e.pointerId]=roleForTarget(e.target,e.clientX);
+  var p=ptrRoles[e.pointerId];
+  if(!p)return;
+  if(!p.fireOrigin)p.role=zoneForX(e.clientX);
   applyPtrRoles();
 });
 function ptrEnd(e){delete ptrRoles[e.pointerId];applyPtrRoles();}
 window.addEventListener('pointerup',ptrEnd);
 window.addEventListener('pointercancel',ptrEnd);
-if(('ontouchstart' in window)||(window.navigator&&navigator.maxTouchPoints>0)){
-  document.getElementById('touch').style.display='block';
-  document.getElementById('fire-pad').style.display='flex';
-}
+syncTouchUI();
 // ---------------------------------------------------------------- screens
 function downloadSelf(){
   try{
-    var blob=new Blob(['<!DOCTYPE html>\n'+document.documentElement.outerHTML],{type:'text/html'});
+    var clone=document.documentElement.cloneNode(true);
+    var startEl=clone.querySelector('#screen-start');if(startEl)startEl.classList.remove('hidden');
+    var overEl=clone.querySelector('#screen-over');if(overEl)overEl.classList.add('hidden');
+    var hudEl=clone.querySelector('#hud-top');if(hudEl)hudEl.classList.add('hidden');
+    var msgEl=clone.querySelector('#msg');if(msgEl)msgEl.textContent='';
+    var banEl=clone.querySelector('#banner');if(banEl)banEl.textContent='';
+    var hintEl=clone.querySelector('#hint');if(hintEl)hintEl.classList.add('hidden');
+    var blob=new Blob(['<!DOCTYPE html>\n'+clone.outerHTML],{type:'text/html'});
     var a=document.createElement('a');
     a.href=URL.createObjectURL(blob);a.download='sunset-rush-overdrive.html';
     document.body.appendChild(a);a.click();
     setTimeout(function(){URL.revokeObjectURL(a.href);if(a.parentNode)a.parentNode.removeChild(a);},4000);
-  }catch(e){}
+  }catch(e){if(window.console&&console.warn)console.warn('download failed',e);}
 }
 document.getElementById('btn-start').addEventListener('click',function(){audioInit();startRace();});
 document.getElementById('btn-retry').addEventListener('click',function(){audioInit();startRace();});
@@ -980,7 +1013,6 @@ function frame(now){
   lastT=now;
   step(dt);
   render();
-  updateHUD();
   requestAnimationFrame(frame);
 }
 buildTrack(1);
@@ -1022,6 +1054,7 @@ window.__game={
       projectiles:projectiles.map(function(p){return {kind:p.kind,x:p.x,z:p.z};}),
       pickups:pickups.map(function(p){return {kind:p.kind,x:p.x,z:p.z};}),
       weatherTypes:weather.slice(0,6).map(function(w){return w.type;}),shake:shake,
+      cars:cars.map(function(c){return {z:c.z,x:c.x};}),
       mobCount:mobs.length,projectileCount:projectiles.length,mineCount:mines.length,
       pickupCount:pickups.length,particleCount:particles.length,weatherCount:weather.length};
   }

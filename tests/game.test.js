@@ -41,7 +41,12 @@ function makeGame() {
     getElementById(id) { return elements[id] || (elements[id] = makeEl(id)); },
     createElement(tag) { return makeEl(tag); },
     addEventListener() {},
-    documentElement: { outerHTML: '<html><body>game</body></html>' },
+    documentElement: {
+      outerHTML: '<html><body>game</body></html>',
+      cloneNode() {
+        return { querySelector() { return null; }, outerHTML: '<html><body>game</body></html>' };
+      },
+    },
     body: { appendChild() {} },
     hidden: false,
   };
@@ -141,13 +146,18 @@ test('blaster fires projectile, costs ammo, respects cooldown', () => {
 });
 
 // spec: sr-cw-dry-fire
-test('dry fire does nothing and never goes negative', () => {
+test('dry fire on cooldown spawns no extra projectile, ammo never negative', () => {
   const { g } = makeGame();
   startRace(g);
+  g.giveWeapon('mine'); // finite weapon, 6 ammo, 0.4s cooldown
   g.setInput({ fire: true });
-  raceThrough(g, 0.5);
-  assert.strictEqual(g.state().projectileCount, 0);
-  assert.strictEqual(g.state().ammo, 0);
+  g.tick(0.016);
+  g.tick(0.016); // still on cooldown: press swallowed
+  assert.strictEqual(g.state().mineCount, 1);
+  assert.ok(g.state().ammo >= 0, 'ammo never negative');
+  raceThrough(g, 3.0); // auto-fire until exhausted, then blaster returns
+  assert.strictEqual(g.state().weapon, 'blaster');
+  assert.strictEqual(g.state().ammo, Infinity);
 });
 
 // spec: sr-cw-homing

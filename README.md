@@ -28,9 +28,12 @@ dependencies, works offline.
 | --- | --- |
 | Arrows or A/D | Steer |
 | Down or S | Brake |
-| Space or Z | Fire equipped weapon |
+| Space or Z | Fire (blaster is always ready; crates swap in specials) |
 | M | Mute |
 | Touch: screen sides / center strip / FIRE pad | Steer / brake / fire |
+
+You start every race with the blaster (unlimited ammo). Amber **W** crates
+swap in a special weapon; when its ammo runs out the blaster returns.
 
 The title and game-over screens include a **Download this game (HTML)** button:
 the saved file runs from disk with no network.
@@ -54,6 +57,7 @@ node .devgate/scripts/semantic-scan.mjs          # AST scan (needs: npm i --no-s
 python3 .devgate/scripts/regression_check.py --staged --pre-commit
 node scripts/verify-standalone.mjs               # project gate: offline/single-file invariants
 node .devgate/scripts/run-tests.mjs              # headless game-logic tests (node --test)
+node tests/e2e-chrome.mjs                        # trusted-input E2E: real keys/touch via CDP + screenshots
 python3 .devgate/scripts/spec_traceability.py    # blocking: every requirement id needs a marker
 ```
 

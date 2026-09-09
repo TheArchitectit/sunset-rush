@@ -34,7 +34,7 @@ for (const [name, re] of banned) {
 }
 const required = [
   ['viewport meta', /<meta name="viewport"/],
-  ['game canvas', /<canvas id="game">/],
+  ['game canvas', /<canvas id="game"/],
   ['download button', /id="btn-download"/],
   ['test hook', /window\.__game\s*=/],
   ['inline script', /<script>/],
