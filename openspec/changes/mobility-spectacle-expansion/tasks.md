@@ -27,7 +27,7 @@
 - [x] 4.3 Alien swarm escalation waves at checkpoints (sr-ai-wave)
 
 ## 5. Validation
-- [ ] 5.1 Mobility matrix green on all viewports post-fix
+- [x] 5.1 Mobility matrix green on all viewports post-fix
 - [x] 5.2 Feature tests: skid, backflip, explosion layers, saucer behavior
 - [x] 5.3 CI: run mobility matrix in the gates workflow
 - [x] 5.4 Unit tests for new dynamics; failure-registry entries for F1-F7

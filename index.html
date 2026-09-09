@@ -516,7 +516,9 @@ function updateMobs(dt){
     ep.z=(ep.z-ep.spd*dt+trackLen)%trackLen;
     ep.x+=clamp(ep.tx-ep.x,-1,1)*dt*0.8;
     var edz=wrapDist(ep.z,pos);
-    if(edz>5*SEG_LEN){eproj.splice(ei,1);continue;}
+    // plasma bolts spawn up to 120 segments ahead and fly back toward the
+    // player; only cull once they pass well behind the player (sr-ai-saucer)
+    if(edz<-8*SEG_LEN){eproj.splice(ei,1);continue;}
     if(Math.abs(edz)<SEG_LEN&&Math.abs(ep.x-playerX)<0.4&&!airborne){
       eproj.splice(ei,1);
       if(shieldT<=0)damagePlayer(10,'plasma');
@@ -636,7 +638,9 @@ function update(dt){
   if(input.left)steer-=1;
   if(input.right)steer+=1;
   // --- skid-out: brake+steer at speed, or extreme steering on low grip
-  var demand=Math.abs(steer)*(input.brake?1.2:0.55)+((input.brake&&speedPercent>SKID_SPEED_PCT)?0.45:0);
+  // steer-only demand 0.62 exceeds the lowest biome grip threshold (tundra 0.55*1.05=0.5775):
+  // full steering at top speed skids only on low-grip biomes, per sr-vd-skidout
+  var demand=Math.abs(steer)*(input.brake?1.2:0.62)+((input.brake&&speedPercent>SKID_SPEED_PCT)?0.45:0);
   if(!skid&&speedPercent>SKID_SPEED_PCT&&demand>b.grip*1.05){
     skid=true;skidRecover=0;screech();
     msgT=1;showMsg('SKID!');

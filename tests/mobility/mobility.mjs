@@ -91,8 +91,8 @@ const ANALYZE = `(() => {
     if (x<minX)minX=x; if (x>maxX)maxX=x;
     if (y<minY)minY=y; if (y>maxY)maxY=y;
   }
-  const car = count > 40 ? { left:minX/DPR, right:maxX/DPR, top:minY/DPR, bottom:maxY/DPR,
-    cx:((minX+maxX)/2)/DPR, cy:((minY+maxY)/2)/DPR, count } : null;
+  const car = count > 40 ? { left:minX, right:maxX, top:minY, bottom:maxY,
+    cx:(minX+maxX)/2, cy:(minY+maxY)/2, count } : null;
   // Is the car over road? sample directly under the car center bottom.
   let carOnRoad = null;
   if (car) {
@@ -105,17 +105,18 @@ const ANALYZE = `(() => {
       if (isRoad((yy*c.width+xx)*4)) { carOnRoad = true; break; }
     }
   }
-  // Brake lights: red pixels in a strip just above the car's rear (brake glow)
+  // Brake lights: the renderer draws them at fixed offsets from the car anchor
+  // (px=W/2, py=0.84H when grounded), so probe that rect, not the pink bbox
+  // (the bbox merges with rumble strips while off-road).
+  const wc2 = Math.min(Math.max(W*0.16, 60), 190);
+  const pyA = H*0.84;
+  const bx0=Math.round((W/2 - wc2*0.55)*DPR), bx1=Math.round((W/2 + wc2*0.55)*DPR);
+  const by0=Math.round((pyA - wc2*0.24)*DPR), by1=Math.round((pyA + wc2*0.03)*DPR);
   let brakeGlow = 0;
-  if (car) {
-    const bx0=Math.round((car.cx-carW(car)*1.3)*DPR), bx1=Math.round((car.cx+carW(car)*1.3)*DPR);
-    const by0=Math.round((car.bottom-12)*DPR), by1=Math.round((car.bottom+6)*DPR);
-    for (let y=Math.max(0,by0); y<Math.min(c.height,by1); y++) for (let x=Math.max(0,bx0); x<Math.min(c.width,bx1); x++) {
-      const i=(y*c.width+x)*4;
-      if (d[i]>230 && d[i+1]<80 && d[i+2]<80) brakeGlow++;
-    }
+  for (let y=Math.max(0,by0); y<Math.min(c.height,by1); y++) for (let x=Math.max(0,bx0); x<Math.min(c.width,bx1); x++) {
+    const i=(y*c.width+x)*4;
+    if (d[i]>230 && d[i+1]<80 && d[i+2]<80) brakeGlow++;
   }
-  function carW(car){ return (car.right-car.left)/2 * 0.9; }
   // Skid marks: dark streak pixels just behind/around the car on the road.
   let skidMarks = 0;
   if (car) {
@@ -127,11 +128,12 @@ const ANALYZE = `(() => {
     }
   }
   return { W, H, car, carOnRoad, brakeGlow, skidMarks,
-    roadNear: roadAt(H*0.86),
+    // scan several near rows (hills/curves can dip a single row off-road)
+    roadNear: [0.90,0.88,0.86,0.85,0.83].map(f=>roadAt(H*f)).filter(Boolean).sort((a,b)=>b.width-a.width)[0] || null,
     roadMid: [0.72,0.68,0.64,0.60].map(f=>roadAt(H*f)).filter(Boolean).sort((a,b)=>b.width-a.width)[0] || null,
     roadFar: roadAt(H*0.52),
     state: st.state, playerX: st.playerX, speed: st.speed, level: st.level,
-    skid: st.skid, air: st.air, flips: st.flips };
+    skid: st.skid, airborne: st.airborne, flips: st.flips, skidMarkCount: st.skidMarkCount };
 })()`;
 
 const RECTS = `(() => {
@@ -200,6 +202,8 @@ async function holdBrake(page, vp, ms) {
 }
 
 // The invariants every scenario must satisfy.
+// spec: sr-pre-containment
+// spec: sr-vd-brake-feedback
 async function assertMobility(page, vp, label, errors) {
   const a = await page.evaluate(ANALYZE);
   assert.ok(a.car, `${label}: player car pixels not found (${a.car && a.car.count})`);
@@ -328,6 +332,7 @@ for (const vp of [VIEWPORTS[2], VIEWPORTS[6]]) {
 
 // Feature validation: skid-out, ramp backflip, saucer plasma, layered explosion.
 // Setup may use state hooks; all triggering input is real keyboard/touch.
+// spec: sr-vd-skidout
 await run('features: skid-out via real input on low grip', async () => {
   const vp = VIEWPORTS[2];
   const { ctx, page, errors } = await newPage(browser, vp);
@@ -349,6 +354,8 @@ await run('features: skid-out via real input on low grip', async () => {
   } finally { await ctx.close(); }
 });
 
+// spec: sr-vd-ramp
+// spec: sr-vd-backflip
 await run('features: ramp launch, backflip, clean landing via real input', async () => {
   const vp = VIEWPORTS[2];
   const { ctx, page, errors } = await newPage(browser, vp);
@@ -385,6 +392,8 @@ await run('features: ramp launch, backflip, clean landing via real input', async
   } finally { await ctx.close(); }
 });
 
+// spec: sr-ai-saucer
+// spec: sr-ai-wave
 await run('features: saucer telegraphs + fires plasma; shockwave kill makes layered explosion', async () => {
   const vp = VIEWPORTS[6];
   const { ctx, page, errors } = await newPage(browser, vp);
