@@ -19,15 +19,23 @@ dependencies, works offline.
 - **Power-ups** — nitro, shield, repair, magnet, clock crates (cyan/green).
 - **Armor pool** — mob rams and traffic crashes cost armor; zero armor wrecks
   the run. The checkpoint timer still applies.
-- **Effects** — particles, screen shake, speed lines, muzzle flash, biome
-  weather, synthesized engine/weapon/explosion/pickup sounds (M mutes).
+- **Skid-outs** — brake + steer at speed (or any hard steering on ice) breaks
+  traction: skid marks, smoke, screech, scrubbed speed. Ease off to recover.
+- **Ramps and backflips** — chevron ramps launch the car; steer in the air to
+  rotate. Land a full rotation for a BACKFLIP bonus; land crooked and it hurts.
+- **Aliens** — hovering saucers strafe above the road, telegraph, and fire
+  dodgeable plasma bolts. Checkpoints from level 2 trigger alien swarm waves.
+- **Effects** — layered explosions (flash, fireball, debris, smoke, shockwave
+  ring), camera roll, skid marks, brake lights, screen shake, speed lines,
+  muzzle flash, biome weather, synthesized engine/weapon/explosion/pickup
+  sounds (M mutes).
 
 ## Controls
 
 | Input | Action |
 | --- | --- |
 | Arrows or A/D | Steer |
-| Down or S | Brake |
+| Down or S | Brake (with brake lights; brake + steer at speed = skid-out) |
 | Space or Z | Fire (blaster is always ready; crates swap in specials) |
 | M | Mute |
 | Touch: screen sides / center strip / FIRE pad | Steer / brake / fire |

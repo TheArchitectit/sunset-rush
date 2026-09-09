@@ -32,6 +32,8 @@ jobs:
         run: node .devgate/scripts/run-tests.mjs
       - name: Trusted-input E2E (real keyboard/touch via CDP)
         run: node tests/e2e-chrome.mjs
+      - name: Mobility matrix (Playwright on system Chrome)
+        run: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-save playwright && node tests/mobility/mobility.mjs
       - name: Spec traceability (blocking)
         run: python3 .devgate/scripts/spec_traceability.py --report
       - name: Silent-success scan

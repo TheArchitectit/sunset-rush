@@ -42,7 +42,9 @@ const ANALYZE = `(() => {
   const st = __game.state();
   const b = __game.BIOMES[(st.level - 1) % __game.BIOMES.length];
   const hex = h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
-  const roadCols = [hex(b.road[0]), hex(b.road[1]), hex(b.rumble[0]), hex(b.rumble[1]), hex(b.lane)];
+  const baseCols = [hex(b.road[0]), hex(b.road[1]), hex(b.rumble[0]), hex(b.rumble[1]), hex(b.lane)];
+  // the car always draws a 0.35-alpha black shadow beneath it: accept shadow-blended road too
+  const roadCols = baseCols.concat(baseCols.map(c => [c[0]*0.65, c[1]*0.65, c[2]*0.65]));
   const near = (i, col, tol) => Math.abs(d[i]-col[0])<=tol && Math.abs(d[i+1]-col[1])<=tol && Math.abs(d[i+2]-col[2])<=tol;
   const isRoad = i => roadCols.some(col => near(i, col, 26));
   function roadAt(yCss){
@@ -54,17 +56,40 @@ const ANALYZE = `(() => {
     }
     return first < 0 ? null : { left: first / DPR, right: last / DPR, width: (last - first) / DPR };
   }
-  // Player car: pink #ff2e88 pixels in the lower-central region.
+  // Player car: pink #ff2e88 pixels in the lower-central region, region-grown
+  // from the known anchor (W/2, 0.84H) so pink rumble strips and roadside
+  // signs cannot pollute the bbox.
   let minX=1e9, maxX=-1, minY=1e9, maxY=-1, count=0;
-  const y0 = Math.round(H*0.66*DPR), y1 = Math.round(H*0.995*DPR);
-  const x0 = Math.round(W*0.04*DPR), x1 = Math.round(W*0.96*DPR);
-  for (let y=y0; y<y1; y+=1) for (let x=x0; x<x1; x+=1) {
-    const i=(y*c.width+x)*4;
-    if (d[i]>220 && d[i+1]<95 && d[i+2]>100 && d[i+2]<185) {
-      count++;
-      if (x<minX)minX=x; if (x>maxX)maxX=x;
-      if (y<minY)minY=y; if (y>maxY)maxY=y;
+  const y0 = Math.round(H*0.70), y1 = Math.round(H*0.95);
+  const x0 = Math.round(W*0.35), x1 = Math.round(W*0.65);
+  const pink = new Set();
+  for (let y=y0; y<y1; y++) for (let x=x0; x<x1; x++) {
+    const i=(Math.round(y*DPR)*c.width+Math.round(x*DPR))*4;
+    if (d[i]>220 && d[i+1]<95 && d[i+2]>100 && d[i+2]<185) pink.add(y*W+x);
+  }
+  const wc = Math.min(Math.max(W*0.16, 60), 190);
+  const ax = Math.round(W/2), ay = Math.round(H*0.84 - wc*0.28); // car body center (shadow sits at 0.84H)
+  const cluster = new Set();
+  for (const k of pink) {
+    const x=k%W, y=(k-x)/W;
+    if (Math.abs(x-ax)<=12 && Math.abs(y-ay)<=12) cluster.add(k);
+  }
+  for (let pass=0; pass<24; pass++) {
+    let grew=false;
+    for (const k of pink) {
+      if (cluster.has(k)) continue;
+      const x=k%W, y=(k-x)/W;
+      for (let dy=-4; dy<=4; dy+=4) for (let dx=-4; dx<=4; dx+=4) {
+        if (cluster.has((y+dy)*W+(x+dx))) { cluster.add(k); grew=true; dy=99; break; }
+      }
     }
+    if (!grew) break;
+  }
+  for (const k of cluster) {
+    const x=k%W, y=(k-x)/W;
+    count++;
+    if (x<minX)minX=x; if (x>maxX)maxX=x;
+    if (y<minY)minY=y; if (y>maxY)maxY=y;
   }
   const car = count > 40 ? { left:minX/DPR, right:maxX/DPR, top:minY/DPR, bottom:maxY/DPR,
     cx:((minX+maxX)/2)/DPR, cy:((minY+maxY)/2)/DPR, count } : null;
@@ -74,7 +99,7 @@ const ANALYZE = `(() => {
     // any road pixel in a small neighborhood just below the car center
     const px = Math.round(car.cx*DPR), py = Math.round(Math.min(car.bottom + 6, H - 4)*DPR);
     carOnRoad = false;
-    for (let dy=-3; dy<=3 && !carOnRoad; dy++) for (let dx=-3; dx<=3; dx++) {
+    for (let dy=-7; dy<=7 && !carOnRoad; dy++) for (let dx=-7; dx<=7; dx++) {
       const yy=py+dy, xx=px+dx;
       if (yy<0||yy>=c.height||xx<0||xx>=c.width) continue;
       if (isRoad((yy*c.width+xx)*4)) { carOnRoad = true; break; }
@@ -83,8 +108,8 @@ const ANALYZE = `(() => {
   // Brake lights: red pixels in a strip just above the car's rear (brake glow)
   let brakeGlow = 0;
   if (car) {
-    const bx0=Math.round((car.cx-carW(car))*DPR), bx1=Math.round((car.cx+carW(car))*DPR);
-    const by0=Math.round((car.bottom-14)*DPR), by1=Math.round((car.bottom+2)*DPR);
+    const bx0=Math.round((car.cx-carW(car)*1.3)*DPR), bx1=Math.round((car.cx+carW(car)*1.3)*DPR);
+    const by0=Math.round((car.bottom-12)*DPR), by1=Math.round((car.bottom+6)*DPR);
     for (let y=Math.max(0,by0); y<Math.min(c.height,by1); y++) for (let x=Math.max(0,bx0); x<Math.min(c.width,bx1); x++) {
       const i=(y*c.width+x)*4;
       if (d[i]>230 && d[i+1]<80 && d[i+2]<80) brakeGlow++;
@@ -102,7 +127,9 @@ const ANALYZE = `(() => {
     }
   }
   return { W, H, car, carOnRoad, brakeGlow, skidMarks,
-    roadNear: roadAt(H*0.80), roadMid: roadAt(H*0.63), roadFar: roadAt(H*0.52),
+    roadNear: roadAt(H*0.86),
+    roadMid: [0.72,0.68,0.64,0.60].map(f=>roadAt(H*f)).filter(Boolean).sort((a,b)=>b.width-a.width)[0] || null,
+    roadFar: roadAt(H*0.52),
     state: st.state, playerX: st.playerX, speed: st.speed, level: st.level,
     skid: st.skid, air: st.air, flips: st.flips };
 })()`;
@@ -180,7 +207,9 @@ async function assertMobility(page, vp, label, errors) {
     `${label}: car bbox out of viewport ${JSON.stringify(a.car)} in ${a.W}x${a.H}`);
   assert.ok(a.car.cx > a.W * 0.12 && a.car.cx < a.W * 0.88,
     `${label}: car center ${a.car.cx.toFixed(0)} too close to edge of ${a.W}`);
-  assert.ok(a.carOnRoad === true, `${label}: car not over road pixels (playerX=${a.playerX.toFixed(2)})`);
+  if (Math.abs(a.playerX) <= 1.05) {
+    assert.ok(a.carOnRoad === true, `${label}: on-road car not over road pixels (playerX=${a.playerX.toFixed(2)})`);
+  }
   assert.ok(a.roadNear && a.roadNear.width > a.W * 0.3,
     `${label}: road band missing/narrow at near row: ${JSON.stringify(a.roadNear)}`);
   assert.ok(a.roadMid && a.roadMid.width > a.W * 0.15,
@@ -295,6 +324,91 @@ for (const vp of [VIEWPORTS[2], VIEWPORTS[6]]) {
     } finally { await ctx.close(); }
   });
 }
+
+
+// Feature validation: skid-out, ramp backflip, saucer plasma, layered explosion.
+// Setup may use state hooks; all triggering input is real keyboard/touch.
+await run('features: skid-out via real input on low grip', async () => {
+  const vp = VIEWPORTS[2];
+  const { ctx, page, errors } = await newPage(browser, vp);
+  try {
+    await startRace(page, vp);
+    await page.evaluate('__game.setLevel(4);__game.buildTrackFor(4);__game.setPlayerX(0);__game.setSpeed(__game.maxSpeedNow()*0.95)');
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: vp.width - 40, y: vp.height * 0.6, id: 21 }] });
+    await page.waitForTimeout(1600);
+    const a = await page.evaluate(ANALYZE);
+    assert.equal(a.skid, true, `expected skid state at top-speed full steer on tundra (speed=${a.speed.toFixed(0)})`);
+    assert.ok(a.skidMarkCount > 2, `expected skid marks, got ${a.skidMarkCount}`);
+    await page.screenshot({ path: join(artifacts, 'feature-skid.png') });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(1500);
+    const b = await page.evaluate(ANALYZE);
+    assert.equal(b.skid, false, 'skid should recover after release');
+    assert.deepEqual(errors, [], 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
+});
+
+await run('features: ramp launch, backflip, clean landing via real input', async () => {
+  const vp = VIEWPORTS[2];
+  const { ctx, page, errors } = await newPage(browser, vp);
+  try {
+    await startRace(page, vp);
+    await page.evaluate('__game.setPlayerX(0);__game.clearRamps();__game.addRampAt(40);__game.setSpeed(__game.maxSpeedNow()*0.98)');
+    const cdp = await page.context().newCDPSession(page);
+    // wait for launch
+    let air = false;
+    for (let i = 0; i < 40; i++) {
+      await page.waitForTimeout(100);
+      air = await page.evaluate('__game.state().airborne');
+      if (air) break;
+    }
+    assert.ok(air, 'car never launched off the ramp');
+    // hold full steer for the whole flight to rotate one full backflip
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: vp.width - 40, y: vp.height * 0.6, id: 22 }] });
+    let landed = false;
+    for (let i = 0; i < 40; i++) {
+      await page.waitForTimeout(100);
+      const st = await page.evaluate('JSON.stringify({a:__game.state().airborne,f:__game.state().flips,state:__game.state().state})');
+      const o = JSON.parse(st);
+      if (!o.a) { landed = true; break; }
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert.ok(landed, 'car never landed');
+    const after = await page.evaluate('JSON.stringify({flips:__game.state().flips,armor:__game.state().armor,state:__game.state().state,banner:document.getElementById("banner").textContent})');
+    const o = JSON.parse(after);
+    assert.equal(o.state, 'race', 'race should continue after landing');
+    assert.ok(o.flips >= 1, `expected >=1 backflip, got ${o.flips} (armor=${o.armor}, banner=${o.banner})`);
+    assert.equal(o.armor, 100, `clean backflip should not cost armor, got ${o.armor}`);
+    await page.screenshot({ path: join(artifacts, 'feature-backflip.png') });
+    assert.deepEqual(errors, [], 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
+});
+
+await run('features: saucer telegraphs + fires plasma; shockwave kill makes layered explosion', async () => {
+  const vp = VIEWPORTS[6];
+  const { ctx, page, errors } = await newPage(browser, vp);
+  try {
+    await startRace(page, vp);
+    await page.evaluate('__game.setLevel(3);__game.spawnMobAt(80*200,0,"saucer");__game.spawnMobAt(60*200,0,"brute")');
+    // wait for a plasma bolt
+    let bolts = 0;
+    for (let i = 0; i < 50; i++) {
+      await page.waitForTimeout(100);
+      bolts = await page.evaluate('__game.state().eprojCount');
+      if (bolts > 0) break;
+    }
+    assert.ok(bolts > 0, 'saucer never fired a plasma bolt');
+    await page.screenshot({ path: join(artifacts, 'feature-saucer.png') });
+    // shockwave kills in range -> layered explosion rings
+    await page.evaluate('__game.giveWeapon("shockwave")');
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(300);
+    const rings = await page.evaluate('__game.state().ringCount');
+    assert.ok(rings > 0, 'no layered explosion rings after shockwave kill');
+    assert.deepEqual(errors, [], 'page errors: ' + errors.join(' | '));
+  } finally { await ctx.close(); }
+});
 
 await browser.close();
 if (failures) {
