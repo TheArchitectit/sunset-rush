@@ -49,9 +49,9 @@ the saved file runs from disk with no network.
 ## Development
 
 Spec-first with OpenSpec; gated with
-[DevGate](https://github.com/TheArchitectit/DevGate-Agentic-Framework) (vendored
-at `.devgate/`, project deltas in the `.guardrails/` overlay — the baseline is
-never edited).
+[DevGate](https://github.com/TheArchitectit/DevGate-Agentic-Framework) (pinned
+submodule at `.devgate/`, project deltas in the `.guardrails/` overlay — the
+baseline is never edited).
 
 - `openspec/changes/add-overdrive-combat/` — proposal, design, tasks, spec deltas
 - `openspec/specs/` — archived capability specs (requirement ids are traced to
